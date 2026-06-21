@@ -50,8 +50,6 @@ def main():
             tts = TextToSpeech()
             st.session_state.voice_pipeline = VoicePipeline(llm_coach, tts)
         except Exception as e:
-            st.error(f"VOICE PIPELINE ERROR: {e}")
-            print("VOICE PIPELINE ERROR:", e)
             st.session_state.voice_pipeline = None
 
     workout_started = st.session_state.get("workout_started", False)
@@ -68,9 +66,7 @@ def main():
 
         if not workout_started:
             plan_exercise = st.selectbox("Exercise", options=EXERCISE_OPTIONS, key="plan_exercise")
-
             plan_sets = st.number_input("Sets", min_value=0, max_value=50, key="plan_sets", step=1)
-
             plan_reps = st.number_input("Reps per Set", min_value=0, max_value=50, key="plan_reps", step=1)
 
             st.markdown("")
@@ -82,6 +78,8 @@ def main():
                 st.session_state.target_sets = int(plan_sets)
                 st.session_state.reps_per_set = int(plan_reps)
                 st.session_state.reps = 0
+                st.session_state.current_set_reps = 0
+                st.session_state.sets_completed = 0
                 st.session_state.workout_started = True
                 st.session_state.set_cycle_started_at = time.time()
                 st.session_state.last_saved_sets_completed = 0
@@ -142,64 +140,46 @@ def main():
 
             if exercise == "Squats":
                 st.subheader("Squat Metrics")
-                st.metric("Knee Angle", f"{st.session_state.knee_angle}°")
-                st.metric("Back Angle", f"{st.session_state.back_angle}°")
-                st.metric("Depth Status", st.session_state.depth_status)
+                st.metric("Knee Angle", f"{st.session_state.get('knee_angle', 0)}°")
+                st.metric("Back Angle", f"{st.session_state.get('back_angle', 0)}°")
+                st.metric("Depth Status", st.session_state.get('depth_status', 'Unknown'))
 
             elif exercise == "Push-ups":
                 st.subheader("Push-up Metrics")
-                st.metric("Elbow Angle", f"{st.session_state.elbow_angle}°")
-                st.metric("Body Alignment", st.session_state.body_alignment)
-                st.metric("Hip Position", st.session_state.hip_status)
+                st.metric("Elbow Angle", f"{st.session_state.get('elbow_angle', 0)}°")
+                st.metric("Body Alignment", st.session_state.get('body_alignment', 'Unknown'))
+                st.metric("Hip Position", st.session_state.get('hip_status', 'Unknown'))
 
             elif exercise == "Biceps Curls (Dumbbell)":
                 st.subheader("Curl Metrics")
-                st.metric("Elbow Angle", f"{st.session_state.elbow_angle}°")
-                st.metric("Shoulder Stability", st.session_state.shoulder_status)
-                st.metric("Swing Detection", st.session_state.swing_status)
+                st.metric("Elbow Angle", f"{st.session_state.get('elbow_angle', 0)}°")
+                st.metric("Shoulder Stability", st.session_state.get('shoulder_status', 'Unknown'))
+                st.metric("Swing Detection", st.session_state.get('swing_status', 'Unknown'))
 
             elif exercise == "Shoulder Press":
                 st.subheader("Shoulder Press Metrics")
-                st.metric("Elbow Angle", f"{st.session_state.elbow_angle}°")
-                st.metric("Arm Extension", st.session_state.extension_status)
-                st.metric("Back Arch", st.session_state.back_arch_status)
+                st.metric("Elbow Angle", f"{st.session_state.get('elbow_angle', 0)}°")
+                st.metric("Arm Extension", st.session_state.get('extension_status', 'Unknown'))
+                st.metric("Back Arch", st.session_state.get('back_arch_status', 'Unknown'))
 
             elif exercise == "Lunges":
                 st.subheader("Lunge Metrics")
-                st.metric("Front Knee Angle", f"{st.session_state.front_knee_angle}°")
-                st.metric("Torso Angle", f"{st.session_state.torso_angle}°")
-                st.metric("Balance Status", st.session_state.balance_status)
+                st.metric("Front Knee Angle", f"{st.session_state.get('front_knee_angle', 0)}°")
+                st.metric("Torso Angle", f"{st.session_state.get('torso_angle', 0)}°")
+                st.metric("Balance Status", st.session_state.get('balance_status', 'Unknown'))
 
     st.title("AI Real-time GYM Coach")
     st.markdown("#### Real-time pose detection with proactive AI voice coaching")
  
-    if st.session_state.get("audio_to_play"):
-        autoplay_audio(st.session_state.audio_to_play)
-
+    # Handle incoming audio playbacks safely via the browser text-to-speech engine
     if st.session_state.get("coach_feedback"):
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
-
-    if st.button("VOICE TEST"):
-        st.write("Button clicked")
-
-    if st.session_state.get("voice_pipeline"):
-        st.write("Voice pipeline exists")
-
-        result = st.session_state.voice_pipeline.process_event(
-            event="workout_started",
-            exercise="Squats",
-            metrics={}
-            )
-
-        if result:
-            audio, text = result
-
-            st.write(text)
-
-            st.audio(audio, format="audio/mp3")
-    else:
-        st.error("Voice pipeline is None")
+        
+        autoplay_audio(st.session_state.coach_feedback)
+        
+        if "last_processed_feedback" not in st.session_state or st.session_state["last_processed_feedback"] != st.session_state.coach_feedback:
+            st.session_state["last_processed_feedback"] = st.session_state.coach_feedback
 
     if not workout_started:
         st.markdown(
@@ -235,7 +215,43 @@ def main():
             async_processing=True
         )
 
+        # 1. Pull current changes out of the video background process thread
         sync_metrics_update(context)
+
+        # 2. EVENT TRACKING ENGINE: Watch values and trigger speech events
+        if st.session_state.get("voice_pipeline"):
+            current_reps = int(st.session_state.get("current_set_reps", 0))
+            target_reps = int(st.session_state.get("reps_per_set", 0))
+            exercise = st.session_state.get("exercise_type")
+
+            if "last_spoken_rep" not in st.session_state:
+                st.session_state["last_spoken_rep"] = -1
+
+            # Trigger only if reps change cleanly
+            if current_reps != st.session_state["last_spoken_rep"] and current_reps > 0:
+                st.session_state["last_spoken_rep"] = current_reps
+                result = None
+
+                # Pattern A: "3 more to go"
+                if current_reps == target_reps - 3 and target_reps >= 3:
+                    result = st.session_state.voice_pipeline.process_event(
+                        event="rep_milestone", exercise=exercise, metrics={"custom_message": "3 more to go! Keep up the pace!"}
+                    )
+                # Pattern B: "2 more to go"
+                elif current_reps == target_reps - 2 and target_reps >= 2:
+                    result = st.session_state.voice_pipeline.process_event(
+                        event="rep_milestone", exercise=exercise, metrics={"custom_message": "Only 2 more to go! You're doing good in mid!"}
+                    )
+                # Pattern C: Intermediate automatic form alignment summary check
+                elif current_reps == (target_reps // 2) and target_reps > 4:
+                    alignment_status = st.session_state.get("body_alignment", st.session_state.get("shoulder_status", "Good"))
+                    result = st.session_state.voice_pipeline.process_event(
+                        event="form_correction", exercise=exercise, metrics={"posture": alignment_status}
+                    )
+
+                if result:
+                    st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                    st.rerun()
 
         if context.state.playing:
             time.sleep(0.25)
@@ -280,4 +296,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
