@@ -3,17 +3,15 @@ from gtts import gTTS
 
 
 class TextToSpeech:
-    def speak(self, text, lang="en"):
+    def __init__(self):
+        pass
+
+    def speak(self, text: str):
+        """
+        Passes the text string down the pipeline cleanly.
+        We let the browser handle the actual voice synthesis natively.
+        """
         cleaned = (text or "").strip()
-
         if not cleaned:
-            return
-        
-        buffer = BytesIO()
-
-        gTTS(text=cleaned, lang=lang).write_to_fp(buffer)
-
-        buffer.seek(0)
-
-        return buffer.read()
-    
+            return None
+        return cleaned
