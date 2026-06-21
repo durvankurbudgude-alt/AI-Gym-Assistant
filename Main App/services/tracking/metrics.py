@@ -99,26 +99,34 @@ def sync_metrics_update(context):
             if result:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
                 
-    # 3. HANDLE VISUAL ACCESSIBILITY ALERTS
+  # 3. HANDLE VISUAL ACCESSIBILITY ALERTS
     pose_detected = latest_metrics.get("pose_detected", True)
     
     if not pose_detected and st.session_state.get("voice_pipeline"):
-        result = st.session_state.voice_pipeline.process_event(
-            event="no_pose_detected",
-            exercise=exercise,
-            metrics={"issue": "No pose detected! Please step into the camera frame."},
-        )
-    
-        if result:
-            st.session_state.audio_to_play, st.session_state.coach_feedback = result
+        if st.session_state.get("coach_feedback") != "No pose detected! Please step into the camera frame.":
+            result = st.session_state.voice_pipeline.process_event(
+                event="no_pose_detected",
+                exercise=exercise,
+                metrics={"issue": "No pose detected! Please step into the camera frame."},
+            )
+            if result:
+                st.session_state.audio_to_play, st.session_state.coach_feedback = result
 
     # 4. ONGOING FORM CHECKS
     if st.session_state.get("voice_pipeline"):
-        result = st.session_state.voice_pipeline.process_event(
-            event="ongoing_form_check",
-            exercise=exercise,
-            metrics=latest_metrics,
-        )
-        
-        if result is not None:
-            st.session_state.audio_to_play, st.session_state.coach_feedback = result
+        # Check if there is an active problem flag coming from vision frames
+        has_issue = False
+        if exercise == "Squats" and latest_metrics.get("depth_status") == "TOO HIGH":
+            has_issue = True
+        elif exercise == "Push-ups" and latest_metrics.get("body_alignment") == "Poor Form":
+            has_issue = True
+            
+        # Only check the pipeline if an actual posture fault is occurring right now
+        if has_issue:
+            result = st.session_state.voice_pipeline.process_event(
+                event="ongoing_form_check",
+                exercise=exercise,
+                metrics=latest_metrics,
+            )
+            if result is not None:
+                st.session_state.audio_to_play, st.session_state.coach_feedback = result
