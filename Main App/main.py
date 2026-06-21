@@ -21,36 +21,39 @@ from services.coaching.tts import TextToSpeech
 from services.coaching.voice_pipeline import VoicePipeline
 
 
-def autoplay_audio(audio_source):
+def autoplay_audio(text_prompt):
     """
-    Converts raw server audio bytes into a native HTML5 autoplay playback element.
+    Leverages the browser's native Web Speech API to bypass iframe autoplay blocks.
+    Completely stable on Streamlit Cloud servers.
     """
-    if not audio_source:
+    if not text_prompt:
         return
     
-    try:
-        if isinstance(audio_source, str) and os.path.exists(audio_source):
-            with open(audio_source, "rb") as f:
-                audio_bytes = f.read()
-        elif isinstance(audio_source, bytes):
-            audio_bytes = audio_source
-        else:
-            try:
-                audio_bytes = audio_source.read()
-            except:
-                audio_bytes = audio_source.getvalue()
-
-        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
-        
-        # Using native HTML5 audio control configuration
-        audio_html = f"""
-        <audio autoplay class="speech-player" style="display:none;">
-            <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
-        </audio>
-        """
-        st.markdown(audio_html, unsafe_allow_html=True)
-    except Exception as e:
-        print(f"Audio autoplay failed: {e}")
+    # Escape quotes and clear line breaks to prevent script breakage
+    safe_text = str(text_prompt).replace('"', '\\"').replace('\n', ' ')
+    
+    html_script = f"""
+    <div id="voice-synthesis-player" style="display:none;">
+        <script>
+            (function() {{
+                if ('speechSynthesis' in window) {{
+                    // Cancel any active speech queues so sounds don't overlap
+                    window.speechSynthesis.cancel();
+                    
+                    var utterance = new SpeechSynthesisUtterance("{safe_text}");
+                    utterance.lang = 'en-US';
+                    utterance.rate = 1.05;  // Slightly faster for an athletic coach feel
+                    utterance.pitch = 1.0;
+                    
+                    window.speechSynthesis.speak(utterance);
+                }} else {{
+                    console.error("Browser text-to-speech engine not supported.");
+                }}
+            }})();
+        </script>
+    </div>
+    """
+    st.markdown(html_script, unsafe_allow_html=True)
 
   
 def main():
