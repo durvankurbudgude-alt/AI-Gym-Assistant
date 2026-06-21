@@ -83,6 +83,8 @@ def main():
                 st.session_state.workout_started = True
                 st.session_state.set_cycle_started_at = time.time()
                 st.session_state.last_saved_sets_completed = 0
+                st.session_state.coach_feedback = None
+                st.session_state.last_spoken_text = None
 
                 if st.session_state.voice_pipeline:
                     result = st.session_state.voice_pipeline.process_event(
@@ -108,6 +110,8 @@ def main():
 
             if end_session_button:
                 st.session_state.workout_started = False
+                st.session_state.coach_feedback = None
+                st.session_state.last_spoken_text = None
                 
                 if st.session_state.voice_pipeline:
                     result = st.session_state.voice_pipeline.process_event(
@@ -171,15 +175,14 @@ def main():
     st.title("AI Real-time GYM Coach")
     st.markdown("#### Real-time pose detection with proactive AI voice coaching")
  
-   # Handle incoming audio playbacks safely via the sandboxed frame
+    # Handle incoming audio playbacks safely via a sandboxed frame
     if st.session_state.get("coach_feedback"):
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-        # Check if this text has already been dispatched to the speaker frame
         if st.session_state.get("last_spoken_text") != st.session_state.coach_feedback:
-            autoplay_audio(st.session_state.coach_feedback)
             st.session_state["last_spoken_text"] = st.session_state.coach_feedback
+            autoplay_audio(st.session_state.coach_feedback)
 
     if not workout_started:
         st.markdown(
@@ -254,7 +257,7 @@ def main():
                     st.rerun()
 
         if context.state.playing:
-            time.sleep(0.25)
+            time.sleep(0.1)  # Dropped from 0.25 to prevent frame stuttering
             st.rerun()
 
         inject_webrtc_styles()
