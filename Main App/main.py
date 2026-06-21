@@ -21,33 +21,15 @@ from services.coaching.tts import TextToSpeech
 from services.coaching.voice_pipeline import VoicePipeline
 
 
-def autoplay_audio(text_prompt):
+def autoplay_audio(audio_bytes):
     """
-    Leverages the browser's native Web Speech API to bypass iframe autoplay blocks.
-    Completely stable on Streamlit Cloud servers.
+    Uses Streamlit's official built-in engine to play audio.
+    Fully authorized to pass through Streamlit Cloud's cross-origin iframe.
     """
-    if not text_prompt:
+    if not audio_bytes:
         return
     
-    safe_text = str(text_prompt).replace('"', '\\"').replace('\n', ' ')
-    
-    html_script = f"""
-    <div id="voice-synthesis-player-{int(time.time())}" style="display:none;">
-        <script>
-            (function() {{
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    var utterance = new SpeechSynthesisUtterance("{safe_text}");
-                    utterance.lang = 'en-US';
-                    utterance.rate = 1.05;
-                    utterance.pitch = 1.0;
-                    window.speechSynthesis.speak(utterance);
-                }}
-            }})();
-        </script>
-    </div>
-    """
-    st.markdown(html_script, unsafe_allow_html=True)
+    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
 
   
 def main():
