@@ -57,6 +57,7 @@ def sync_metrics_update(context):
 
     last_saved_sets = st.session_state.get("last_saved_sets_completed", 0)
 
+    # 1. HANDLE SET COMPLETION EVENTS
     if target_sets > 0 and reps_per_set > 0 and sets_completed > last_saved_sets:
         newly_completed = sets_completed - last_saved_sets
         now_ts = time.time()
@@ -79,6 +80,7 @@ def sync_metrics_update(context):
         st.session_state.set_cycle_started_at = now_ts
         st.session_state.last_saved_sets_completed = sets_completed
 
+    # 2. HANDLE WORKOUT COMPLETION EVENTS
     if workout_completed and not st.session_state.get("last_notified_workout_complete", False):
         st.session_state.last_notified_workout_complete = True
 
@@ -92,6 +94,7 @@ def sync_metrics_update(context):
             if result:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
                 
+    # 3. HANDLE VISUAL ACCESSIBILITY ALERTS
     pose_detected = latest_metrics.get("pose_detected", True)
     
     if not pose_detected and st.session_state.get("voice_pipeline"):
@@ -104,13 +107,15 @@ def sync_metrics_update(context):
         if result:
             st.session_state.audio_to_play, st.session_state.coach_feedback = result
 
+    # 4. CRITICAL FIX: ONGOING FORM CHECKS
     if st.session_state.get("voice_pipeline"):
-        print("VOICE PIPELINE:", st.session_state.get("voice_pipeline"))
         result = st.session_state.voice_pipeline.process_event(
             event="ongoing_form_check",
             exercise=exercise,
             metrics=latest_metrics,
         )
         
-        if result:
+        # Only update the state if the pipeline actually returns an issue statement.
+        # This keeps empty frame loops from wiping active rep milestone feedback!
+        if result is not None:
             st.session_state.audio_to_play, st.session_state.coach_feedback = result
