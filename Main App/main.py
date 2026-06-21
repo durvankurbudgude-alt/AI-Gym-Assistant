@@ -32,7 +32,6 @@ def autoplay_audio(audio_bytes, track_id):
     try:
         b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
         
-        # Using custom styling to keep it isolated but completely functional
         audio_html = f"""
         <div id="audio-player-container-{track_id}" style="display:none;">
             <audio autoplay="autoplay" controls="controls" style="display:none;">
@@ -80,8 +79,6 @@ def main():
                 llm_coach = LLMCoach(groq_client)
                 tts = TextToSpeech()
                 st.session_state.voice_pipeline = VoicePipeline(llm_coach, tts)
-            else:
-                st.sidebar.error("🔑 GROQ_API_KEY not found in Environment or Secrets!")
         except Exception as e:
             st.sidebar.error(f"💥 Pipeline Initialization Failed: {str(e)}")
             st.session_state.voice_pipeline = None
@@ -98,8 +95,7 @@ def main():
         st.subheader("Audio Settings")
         audio_permission = st.checkbox("🔊 Enable Coach Voice Outputs", value=True, key="audio_permission_checkbox")
         
-        # 🌟 CRITICAL FIX: Safe Zone Placeholder inside the Sidebar framework
-        # Moving this here protects the HTML5 player component from getting torn down by webcam refreshes
+        # Safe stable container inside sidebar away from direct WebRTC context clears
         sidebar_audio_placeholder = st.empty()
 
         st.divider()
@@ -214,13 +210,11 @@ def main():
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-    # Catch any newly prepared tracks and transfer them into the persistent viewer
     if st.session_state.get("audio_to_play"):
         st.session_state["current_audio_track"] = st.session_state.audio_to_play
         st.session_state["current_track_id"] = int(time.time() * 1000)
         st.session_state["audio_to_play"] = None
 
-    # Render persistent tracks inside the stable sidebar layout container
     if st.session_state.get("current_audio_track"):
         if st.session_state.get("audio_permission_checkbox", False):
             with sidebar_audio_placeholder:
@@ -251,20 +245,23 @@ def main():
 
         sync_metrics_update(context)
 
-        if st.session_state.get("voice_pipeline"):
-            current_reps = int(st.session_state.get("current_set_reps", 0))
+        # 🌟 CRITICAL FIX: Pull values directly out of the active video frame context object
+        if context.video_processor and st.session_state.get("voice_pipeline"):
+            processor = context.video_processor
+            
+            # Use direct attribute lookups from our background processing worker thread
+            current_reps = getattr(processor, "current_set_reps", 0)
             target_reps = int(st.session_state.get("reps_per_set", 0))
             exercise = st.session_state.get("exercise_type")
 
             if "last_spoken_rep" not in st.session_state:
                 st.session_state["last_spoken_rep"] = -1
 
-            is_new_rep = (current_reps != st.session_state["last_spoken_rep"] and current_reps > 0)
-            
-            if is_new_rep:
+            if current_reps != st.session_state["last_spoken_rep"] and current_reps > 0:
                 st.session_state["last_spoken_rep"] = current_reps
                 result = None
 
+                # Milestone Conditions
                 if current_reps == target_reps - 3 and target_reps >= 3:
                     result = st.session_state.voice_pipeline.process_event(
                         event="rep_milestone", exercise=exercise, metrics={"custom_message": "3 more to go! Keep up the pace!"}
