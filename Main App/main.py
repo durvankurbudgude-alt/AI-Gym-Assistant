@@ -174,15 +174,19 @@ def main():
 
     st.title("AI Real-time GYM Coach")
     st.markdown("#### Real-time pose detection with proactive AI voice coaching")
- 
-    # Handle incoming audio playbacks safely via a sandboxed frame
+    st.divider()
+
+    # ========================================================
+    # 🔊 NATIVE AUDIO DISPATCHER (MUST RUN BEFORE CAMERA ENGINE)
+    # ========================================================
     if st.session_state.get("coach_feedback"):
-        st.markdown("")
+        # Display the text card clearly on screen
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
+        # Dispatch the audio execution securely
         if st.session_state.get("last_spoken_text") != st.session_state.coach_feedback:
-            st.session_state["last_spoken_text"] = st.session_state.coach_feedback
             autoplay_audio(st.session_state.coach_feedback)
+            st.session_state["last_spoken_text"] = st.session_state.coach_feedback
 
     if not workout_started:
         st.markdown(
