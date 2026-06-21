@@ -32,6 +32,7 @@ def autoplay_audio(audio_bytes, track_id):
     try:
         b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
         
+        # Using custom styling to keep it isolated but completely functional
         audio_html = f"""
         <div id="audio-player-container-{track_id}" style="display:none;">
             <audio autoplay="autoplay" controls="controls" style="display:none;">
@@ -68,9 +69,6 @@ def main():
     if "current_track_id" not in st.session_state:
         st.session_state["current_track_id"] = 0
 
-    # Isolated component slot dedicated to audio layout management
-    audio_placeholder = st.empty()
-
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
         try:
             api_key = os.environ.get("GROQ_API_KEY", "")
@@ -100,6 +98,10 @@ def main():
         st.subheader("Audio Settings")
         audio_permission = st.checkbox("🔊 Enable Coach Voice Outputs", value=True, key="audio_permission_checkbox")
         
+        # 🌟 CRITICAL FIX: Safe Zone Placeholder inside the Sidebar framework
+        # Moving this here protects the HTML5 player component from getting torn down by webcam refreshes
+        sidebar_audio_placeholder = st.empty()
+
         st.divider()
         st.subheader("Workout Plan")
 
@@ -124,7 +126,6 @@ def main():
                 st.session_state.coach_feedback = None
                 st.session_state.audio_to_play = None
                 
-                # Reset tracking variables cleanly for the new session
                 st.session_state["current_audio_track"] = None
                 st.session_state["current_track_id"] = int(time.time() * 1000)
 
@@ -219,10 +220,10 @@ def main():
         st.session_state["current_track_id"] = int(time.time() * 1000)
         st.session_state["audio_to_play"] = None
 
-    # Render the persistent track safely so fast frame updates don't tear it down
+    # Render persistent tracks inside the stable sidebar layout container
     if st.session_state.get("current_audio_track"):
         if st.session_state.get("audio_permission_checkbox", False):
-            with audio_placeholder:
+            with sidebar_audio_placeholder:
                 autoplay_audio(st.session_state["current_audio_track"], st.session_state["current_track_id"])
 
     if not workout_started:
@@ -282,7 +283,6 @@ def main():
                     st.session_state["current_audio_track"] = result[0]
                     st.session_state["current_track_id"] = int(time.time() * 1000)
                     st.session_state.coach_feedback = result[1]
-                    audio_placeholder.empty()
                     st.rerun()
 
         inject_webrtc_styles()
