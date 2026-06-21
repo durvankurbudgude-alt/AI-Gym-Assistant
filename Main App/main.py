@@ -41,7 +41,7 @@ def autoplay_audio(audio_bytes, track_id):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
     except Exception as e:
-        print(f"HTML5 Base64 autoplay execution failed: {e}")
+        st.sidebar.error(f"🔊 Audio Playback HTML Injection Failed: {str(e)}")
 
 
 def main():
@@ -82,7 +82,10 @@ def main():
                 llm_coach = LLMCoach(groq_client)
                 tts = TextToSpeech()
                 st.session_state.voice_pipeline = VoicePipeline(llm_coach, tts)
-        except Exception:
+            else:
+                st.sidebar.error("🔑 GROQ_API_KEY not found in Environment or Secrets!")
+        except Exception as e:
+            st.sidebar.error(f"💥 Pipeline Initialization Failed: {str(e)}")
             st.session_state.voice_pipeline = None
 
     workout_started = st.session_state.get("workout_started", False)
