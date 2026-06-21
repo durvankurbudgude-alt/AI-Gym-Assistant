@@ -21,17 +21,6 @@ from services.coaching.tts import TextToSpeech
 from services.coaching.voice_pipeline import VoicePipeline
 
 
-def autoplay_audio(audio_bytes):
-    """
-    Uses Streamlit's official built-in engine to play audio.
-    Fully authorized to pass through Streamlit Cloud's cross-origin iframe.
-    """
-    if not audio_bytes:
-        return
-    
-    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
-
-  
 def main():
     st.set_page_config(
         page_icon="🏋️‍♀️",
@@ -49,6 +38,11 @@ def main():
         return 
 
     initial_session_defaults()
+
+    # ===================================================================
+    # 🔊 FIXED AUDIO PLAYER CONTAINER (STAY COUPLING IMMUNE)
+    # ===================================================================
+    audio_placeholder = st.empty()
 
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
         try:
@@ -181,9 +175,11 @@ def main():
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
+    # Process audio through the isolated placeholder box
     if st.session_state.get("audio_to_play"):
         if st.session_state.get("audio_permission_checkbox", False):
-            autoplay_audio(st.session_state.audio_to_play)
+            with audio_placeholder:
+                st.audio(st.session_state.audio_to_play, format="audio/mp3", autoplay=True)
         st.session_state["audio_to_play"] = None
 
     if not workout_started:
