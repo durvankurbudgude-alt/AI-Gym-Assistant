@@ -57,6 +57,11 @@ def sync_metrics_update(context):
 
     last_saved_sets = st.session_state.get("last_saved_sets_completed", 0)
 
+    # 🚨 SAFEGUARD: If the app just started and the greeting speech hasn't finished, 
+    # don't allow background camera frames to interrupt the initial announcement.
+    if st.session_state.get("last_spoken_text") != st.session_state.get("coach_feedback"):
+        return
+
     # 1. HANDLE SET COMPLETION EVENTS
     if target_sets > 0 and reps_per_set > 0 and sets_completed > last_saved_sets:
         newly_completed = sets_completed - last_saved_sets
@@ -107,7 +112,7 @@ def sync_metrics_update(context):
         if result:
             st.session_state.audio_to_play, st.session_state.coach_feedback = result
 
-    # 4. CRITICAL FIX: ONGOING FORM CHECKS
+    # 4. ONGOING FORM CHECKS
     if st.session_state.get("voice_pipeline"):
         result = st.session_state.voice_pipeline.process_event(
             event="ongoing_form_check",
@@ -115,7 +120,5 @@ def sync_metrics_update(context):
             metrics=latest_metrics,
         )
         
-        # Only update the state if the pipeline actually returns an issue statement.
-        # This keeps empty frame loops from wiping active rep milestone feedback!
         if result is not None:
             st.session_state.audio_to_play, st.session_state.coach_feedback = result
