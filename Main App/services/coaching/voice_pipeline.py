@@ -95,33 +95,27 @@ class VoicePipeline:
 
 def autoplay_audio(audio_text):
     """
-    Uses an un-refreshable sandboxed HTML5 iframe container.
-    This prevents quick Streamlit reruns from dropping the speech player engine context thread.
+    Renders a standard clean hidden audio delivery block.
     """
     if not audio_text:
         return
-    
+        
+    # We clean the text string cleanly for processing
     safe_text = str(audio_text).replace('"', '\\"').replace('\n', ' ')
     
     html_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head><script>
-        window.onload = function() {{
-            if ('speechSynthesis' in window) {{
-                window.speechSynthesis.cancel();
-                var utterance = new SpeechSynthesisUtterance("{safe_text}");
-                utterance.rate = 1.05;
-                window.speechSynthesis.speak(utterance);
-            }}
-        }};
-    </script></head>
-    <body></body>
-    </html>
+    <div id="voice-player-container">
+        <script>
+            (function() {{
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    var msg = new SpeechSynthesisUtterance("{safe_text}");
+                    msg.rate = 1.05;
+                    window.speechSynthesis.speak(msg);
+                }}
+            }})();
+        </script>
+    </div>
     """
-    
-    b64_html = base64.b64encode(html_code.encode('utf-8')).decode('utf-8')
-    st.components.v1.html(
-        f'<iframe src="data:text/html;base64,{b64_html}" width="0" height="0" style="display:none; border:none;"></iframe>',
-        height=0,
-    )
+    # Use standard markdown to avoid iframe execution block drops
+    st.markdown(html_code, unsafe_allow_html=True)
