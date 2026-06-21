@@ -3,18 +3,15 @@ import time
 from services.config.workout_config import METRICS_FIELDS
 from services.persistence.exercise_repository import add_exercise
 
-
 def sync_metrics_update(context):
     if not context or not hasattr(context, "state") or not context.state.playing:
         return
     
     processor = getattr(context, "video_processor", None)
-
     if not processor:
         return 
     
     exercise = st.session_state.get("exercise_type")
-
     if not exercise:
         return
     
@@ -25,12 +22,10 @@ def sync_metrics_update(context):
         return
     
     reps = latest_metrics.get("reps", 0)
-
     if reps is None:
         reps = 0
         
     st.session_state.reps = reps
-
     fields = METRICS_FIELDS.get(exercise)
 
     if not fields:
@@ -57,11 +52,6 @@ def sync_metrics_update(context):
 
     last_saved_sets = st.session_state.get("last_saved_sets_completed", 0)
 
-    # 🚨 SAFEGUARD: If the app just started and the greeting speech hasn't finished, 
-    # don't allow background camera frames to interrupt the initial announcement.
-    if st.session_state.get("last_spoken_text") != st.session_state.get("coach_feedback"):
-        return
-
     # 1. HANDLE SET COMPLETION EVENTS
     if target_sets > 0 and reps_per_set > 0 and sets_completed > last_saved_sets:
         newly_completed = sets_completed - last_saved_sets
@@ -78,9 +68,10 @@ def sync_metrics_update(context):
                 exercise=exercise,
                 metrics=latest_metrics,
             )
-
             if result:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                # Request layout update explicitly on milestone hit
+                st.rerun()
 
         st.session_state.set_cycle_started_at = now_ts
         st.session_state.last_saved_sets_completed = sets_completed
@@ -95,13 +86,12 @@ def sync_metrics_update(context):
                 exercise=exercise,
                 metrics=latest_metrics,
             )
-
             if result:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                st.rerun()
                 
-  # 3. HANDLE VISUAL ACCESSIBILITY ALERTS
+    # 3. HANDLE VISUAL ACCESSIBILITY ALERTS
     pose_detected = latest_metrics.get("pose_detected", True)
-    
     if not pose_detected and st.session_state.get("voice_pipeline"):
         if st.session_state.get("coach_feedback") != "No pose detected! Please step into the camera frame.":
             result = st.session_state.voice_pipeline.process_event(
@@ -111,17 +101,16 @@ def sync_metrics_update(context):
             )
             if result:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                st.rerun()
 
     # 4. ONGOING FORM CHECKS
     if st.session_state.get("voice_pipeline"):
-        # Check if there is an active problem flag coming from vision frames
         has_issue = False
         if exercise == "Squats" and latest_metrics.get("depth_status") == "TOO HIGH":
             has_issue = True
         elif exercise == "Push-ups" and latest_metrics.get("body_alignment") == "Poor Form":
             has_issue = True
             
-        # Only check the pipeline if an actual posture fault is occurring right now
         if has_issue:
             result = st.session_state.voice_pipeline.process_event(
                 event="ongoing_form_check",
@@ -130,3 +119,4 @@ def sync_metrics_update(context):
             )
             if result is not None:
                 st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                st.rerun()
