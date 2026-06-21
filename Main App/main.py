@@ -258,7 +258,9 @@ def main():
             if "last_spoken_rep" not in st.session_state:
                 st.session_state["last_spoken_rep"] = -1
 
-            if current_reps != st.session_state["last_spoken_rep"] and current_reps > 0:
+            is_new_rep = (current_reps != st.session_state["last_spoken_rep"] and current_reps > 0)
+            
+            if is_new_rep:
                 st.session_state["last_spoken_rep"] = current_reps
                 result = None
 
@@ -280,6 +282,7 @@ def main():
                     st.session_state["current_audio_track"] = result[0]
                     st.session_state["current_track_id"] = int(time.time() * 1000)
                     st.session_state.coach_feedback = result[1]
+                    audio_placeholder.empty()
                     st.rerun()
 
         inject_webrtc_styles()
