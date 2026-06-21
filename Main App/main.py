@@ -21,6 +21,30 @@ from services.coaching.tts import TextToSpeech
 from services.coaching.voice_pipeline import VoicePipeline
 
 
+def autoplay_audio(audio_bytes):
+    """
+    Directly injects base64 audio bytes into an isolated native HTML5 audio element.
+    Bypasses Streamlit state lifecycle teardowns to prevent frame interruption.
+    """
+    if not audio_bytes:
+        return
+    
+    try:
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        unique_id = int(time.time() * 1000)
+        
+        audio_html = f"""
+        <div id="audio-player-wrapper-{unique_id}" style="display:none;">
+            <audio autoplay="autoplay" controls="controls" style="display:none;">
+                <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+            </audio>
+        </div>
+        """
+        st.markdown(audio_html, unsafe_allow_html=True)
+    except Exception as e:
+        print(f"HTML5 Base64 autoplay execution failed: {e}")
+
+
 def main():
     st.set_page_config(
         page_icon="🏋️‍♀️",
@@ -39,9 +63,7 @@ def main():
 
     initial_session_defaults()
 
-    # ===================================================================
-    # 🔊 FIXED AUDIO PLAYER CONTAINER (STAY COUPLING IMMUNE)
-    # ===================================================================
+    # Isolated component slot dedicated to audio layout management
     audio_placeholder = st.empty()
 
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
@@ -175,11 +197,11 @@ def main():
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-    # Process audio through the isolated placeholder box
+    # Execute structural injection within the isolated player container frame
     if st.session_state.get("audio_to_play"):
         if st.session_state.get("audio_permission_checkbox", False):
             with audio_placeholder:
-                st.audio(st.session_state.audio_to_play, format="audio/mp3", autoplay=True)
+                autoplay_audio(st.session_state.audio_to_play)
         st.session_state["audio_to_play"] = None
 
     if not workout_started:
