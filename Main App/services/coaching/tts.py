@@ -1,24 +1,18 @@
-import io
+from io import BytesIO
 from gtts import gTTS
 
-class TextToSpeech:
-    def __init__(self):
-        pass
 
-    def speak(self, text: str):
-        """
-        Generates genuine MP3 audio bytes using gTTS.
-        """
+class TextToSpeech:
+    def speak(self, text, lang="en"):
         cleaned = (text or "").strip()
+
         if not cleaned:
-            return None
+            return
         
-        try:
-            fp = io.BytesIO()
-            tts = gTTS(text=cleaned, lang='en', tld='com')
-            tts.write_to_fp(fp)
-            fp.seek(0)
-            return fp.read()  # Returns raw mp3 bytes cleanly
-        except Exception as e:
-            print(f"gTTS Generation failed: {e}")
-            return None
+        buffer = BytesIO()
+
+        gTTS(text=cleaned, lang=lang).write_to_fp(buffer)
+
+        buffer.seek(0)
+
+        return buffer.read()
