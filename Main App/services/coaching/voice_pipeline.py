@@ -1,6 +1,5 @@
 import time
 import streamlit as st
-import base64
 
 class VoicePipeline:
     def __init__(self, llm, tts):
@@ -85,37 +84,23 @@ class VoicePipeline:
         if not issue:
             issue = f"The user is progressing through the {exercise} routine."
 
-        # Pass context clean to your Groq core engine
-        text = self.llm.give_feedback(event, issue)
-        voice = self.tts.speak(text)
+        # Pass context clean to your Groq core engine using its correct method name
+        try:
+            # We check if your LLM module has give_feedback, otherwise fallback to generate_response
+            if hasattr(self.llm, "give_feedback"):
+                text = self.llm.give_feedback(event, issue)
+            else:
+                text = self.llm.generate_response(event, exercise, metrics)
+                
+            if not text:
+                return None
 
-        self.last_spoken_at = now
-        return voice, text
-    
-
-def autoplay_audio(audio_text):
-    """
-    Renders a standard clean hidden audio delivery block.
-    """
-    if not audio_text:
-        return
-        
-    # We clean the text string cleanly for processing
-    safe_text = str(audio_text).replace('"', '\\"').replace('\n', ' ')
-    
-    html_code = f"""
-    <div id="voice-player-container">
-        <script>
-            (function() {{
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    var msg = new SpeechSynthesisUtterance("{safe_text}");
-                    msg.rate = 1.05;
-                    window.speechSynthesis.speak(msg);
-                }}
-            }})();
-        </script>
-    </div>
-    """
-    # Use standard markdown to avoid iframe execution block drops
-    st.markdown(html_code, unsafe_allow_html=True)
+            # Generate the raw audio bytes using your gTTS backend
+            voice = self.tts.speak(text)
+            
+            self.last_spoken_at = now
+            return voice, text
+            
+        except Exception as e:
+            print(f"Voice Pipeline Execution Error: {e}")
+            return None
