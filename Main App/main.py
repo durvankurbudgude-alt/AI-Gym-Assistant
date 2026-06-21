@@ -33,8 +33,8 @@ def autoplay_audio(audio_bytes, track_id):
         b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
         
         audio_html = f"""
-        <div id="audio-player-container-{track_id}" style="display:none;">
-            <audio autoplay="autoplay" controls="controls" style="display:none;">
+        <div id="audio-player-container-{track_id}">
+            <audio autoplay="autoplay" style="display:none;">
                 <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
             </audio>
         </div>
@@ -67,6 +67,8 @@ def main():
         st.session_state["current_audio_track"] = None
     if "current_track_id" not in st.session_state:
         st.session_state["current_track_id"] = 0
+    if "last_spoken_rep" not in st.session_state:
+        st.session_state["last_spoken_rep"] = -1
 
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
         try:
@@ -124,6 +126,7 @@ def main():
                 
                 st.session_state["current_audio_track"] = None
                 st.session_state["current_track_id"] = int(time.time() * 1000)
+                st.session_state["last_spoken_rep"] = -1
 
                 if st.session_state.voice_pipeline:
                     result = st.session_state.voice_pipeline.process_event(
@@ -151,6 +154,7 @@ def main():
                 st.session_state.workout_started = False
                 st.session_state.coach_feedback = None
                 st.session_state.audio_to_play = None
+                st.session_state["last_spoken_rep"] = -1
                 
                 if st.session_state.voice_pipeline:
                     result = st.session_state.voice_pipeline.process_event(
@@ -215,6 +219,7 @@ def main():
         st.session_state["current_track_id"] = int(time.time() * 1000)
         st.session_state["audio_to_play"] = None
 
+    # Play the tracking track safely out of the sidebar component
     if st.session_state.get("current_audio_track"):
         if st.session_state.get("audio_permission_checkbox", False):
             with sidebar_audio_placeholder:
@@ -243,25 +248,21 @@ def main():
             async_processing=True
         )
 
+        # This securely updates the tracking metrics variables on screen
         sync_metrics_update(context)
 
-        # 🌟 CRITICAL FIX: Pull values directly out of the active video frame context object
-        if context.video_processor and st.session_state.get("voice_pipeline"):
-            processor = context.video_processor
-            
-            # Use direct attribute lookups from our background processing worker thread
-            current_reps = getattr(processor, "current_set_reps", 0)
+        # 🌟 THE SYNC FIX: Leverage sync_metrics_update's native state changes safely
+        if st.session_state.get("voice_pipeline"):
+            current_reps = int(st.session_state.get("current_set_reps", 0))
             target_reps = int(st.session_state.get("reps_per_set", 0))
             exercise = st.session_state.get("exercise_type")
 
-            if "last_spoken_rep" not in st.session_state:
-                st.session_state["last_spoken_rep"] = -1
-
+            # Evaluate milestones when a legitimate new rep registers in session_state
             if current_reps != st.session_state["last_spoken_rep"] and current_reps > 0:
                 st.session_state["last_spoken_rep"] = current_reps
                 result = None
 
-                # Milestone Conditions
+                # Milestone Rules
                 if current_reps == target_reps - 3 and target_reps >= 3:
                     result = st.session_state.voice_pipeline.process_event(
                         event="rep_milestone", exercise=exercise, metrics={"custom_message": "3 more to go! Keep up the pace!"}
