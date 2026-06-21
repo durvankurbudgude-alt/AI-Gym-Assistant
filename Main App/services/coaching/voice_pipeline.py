@@ -1,6 +1,6 @@
 import time
 import streamlit as st
-
+import base64
 
 class VoicePipeline:
     def __init__(self, llm, tts):
@@ -9,8 +9,15 @@ class VoicePipeline:
         self.last_spoken_at = 0
 
     def _find_form_issue(self, exercise, metrics):
+        if not metrics:
+            return None
+            
         if "issue" in metrics:
             return metrics["issue"]
+            
+        # Check if a custom injected milestone message was passed directly from main.py
+        if "custom_message" in metrics:
+            return metrics["custom_message"]
 
         if exercise == "Squats":
             depth = metrics.get("depth_status", "")
@@ -18,7 +25,6 @@ class VoicePipeline:
             
             if depth == "TOO HIGH":
                 return "The user's squat is not deep enough — knees are not bending sufficiently."
-
             if isinstance(back_angle, (int, float)) and back_angle < 130:
                 return "The user is leaning too far forward during the squat."
 
@@ -28,10 +34,8 @@ class VoicePipeline:
             
             if alignment == "Poor Form":
                 return "The user's body is not straight during the push-up."
-
             if hip_status == "SAGGING":
                 return "The user's hips are sagging down during the push-up."
-
             if hip_status == "PIKED UP":
                 return "The user's hips are too high — lower them to form a straight line."
 
@@ -41,7 +45,6 @@ class VoicePipeline:
             
             if swing == "SWINGING":
                 return "The user is swinging their torso during the curl — keep the body still."
-
             if shoulder == "ELBOW DRIFTING":
                 return "The user's elbow is drifting away from their side during the curl."
 
@@ -51,7 +54,6 @@ class VoicePipeline:
             
             if back_arch == "Excessive Arch":
                 return "The user is arching their lower back excessively during the press."
-
             if back_arch == "Slight Arch":
                 return "Slight back arch detected — encourage the user to brace their core."
 
@@ -64,61 +66,52 @@ class VoicePipeline:
         return None
     
     def process_event(self, event, exercise, metrics):
-        print("=" * 60)
-        print("VOICE EVENT:", event)
-        print("EXERCISE:", exercise)
-        print("METRICS:", metrics)
-
+        # Determine contextual issues or milestone strings
         issue = self._find_form_issue(exercise, metrics)
-
-        print("ISSUE FOUND:", issue)
-    def process_event(self, event, exercise, metrics):
-        issue = self._find_form_issue(exercise, metrics)
-
         now = time.time()
 
-        is_major_issue = event in ["workout_started", "set_completed", "workout_completed"]
+        # Check if this is a high-priority workout event
+        is_major_event = event in ["workout_started", "set_completed", "workout_completed", "rep_milestone"]
 
-        if not is_major_issue:
+        # If it's a minor check but no posture problem was identified, skip
+        if not is_major_event:
             if not issue:
                 return None
-            
+            # Rate limit minor form voice drops to once every 5 seconds
             if now - self.last_spoken_at < 5:
                 return None
             
+        # Fallback if no specific string was built but event must talk
+        if not issue:
+            issue = f"The user is progressing through the {exercise} routine."
+
+        # Pass context clean to your Groq core engine
         text = self.llm.give_feedback(event, issue)
         voice = self.tts.speak(text)
 
         self.last_spoken_at = now
-
         return voice, text
     
 
 def autoplay_audio(audio_text):
     """
-    FIXED: Uses a data URI embedded inside an un-refreshable sandboxed iframe.
-    This prevents Streamlit's 0.25s main loop rerun from cutting off the browser's speech engine.
+    Uses an un-refreshable sandboxed HTML5 iframe container.
+    This prevents quick Streamlit reruns from dropping the speech player engine context thread.
     """
     if not audio_text:
         return
     
-    # Clean string format for JavaScript injection
     safe_text = str(audio_text).replace('"', '\\"').replace('\n', ' ')
     
-    # Unique ID to force re-evaluation on new feedback text
-    import time
-    unique_id = int(time.time() * 1000)
-    
-    # We embed the text-to-speech script inside a self-contained document string
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head><script>
         window.onload = function() {{
             if ('speechSynthesis' in window) {{
-                window.speechSynthesis.cancel(); // clear previous queues
+                window.speechSynthesis.cancel();
                 var utterance = new SpeechSynthesisUtterance("{safe_text}");
-                utterance.rate = 1.1;
+                utterance.rate = 1.05;
                 window.speechSynthesis.speak(utterance);
             }}
         }};
@@ -127,11 +120,7 @@ def autoplay_audio(audio_text):
     </html>
     """
     
-    # Convert html to inline base64 data src so it loads independently of Streamlit's layout engine
-    import base64
     b64_html = base64.b64encode(html_code.encode('utf-8')).decode('utf-8')
-    
-    # Render the sandboxed frame in the sidebar
     st.components.v1.html(
         f'<iframe src="data:text/html;base64,{b64_html}" width="0" height="0" style="display:none; border:none;"></iframe>',
         height=0,
