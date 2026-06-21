@@ -29,25 +29,19 @@ def autoplay_audio(text_prompt):
     if not text_prompt:
         return
     
-    # Escape quotes and clear line breaks to prevent script breakage
     safe_text = str(text_prompt).replace('"', '\\"').replace('\n', ' ')
     
     html_script = f"""
-    <div id="voice-synthesis-player" style="display:none;">
+    <div id="voice-synthesis-player-{int(time.time())}" style="display:none;">
         <script>
             (function() {{
                 if ('speechSynthesis' in window) {{
-                    // Cancel any active speech queues so sounds don't overlap
                     window.speechSynthesis.cancel();
-                    
                     var utterance = new SpeechSynthesisUtterance("{safe_text}");
                     utterance.lang = 'en-US';
-                    utterance.rate = 1.05;  // Slightly faster for an athletic coach feel
+                    utterance.rate = 1.05;
                     utterance.pitch = 1.0;
-                    
                     window.speechSynthesis.speak(utterance);
-                }} else {{
-                    console.error("Browser text-to-speech engine not supported.");
                 }}
             }})();
         </script>
@@ -74,7 +68,6 @@ def main():
 
     initial_session_defaults()
 
-    # Initialize Voice Pipeline securely in the background
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
         try:
             api_key = os.environ.get("GROQ_API_KEY", "")
@@ -98,17 +91,9 @@ def main():
             st.caption(f"👤 Login as {st.session_state.username}")
 
         st.divider()
-        
-        # ===================================================================
-        # 🔊 BROWSER AUDIO PERMISSION UNBLOCKER
-        # ===================================================================
         st.subheader("Audio Settings")
-        audio_permission = st.checkbox("🔊 Enable Coach Voice Outputs", value=False, key="audio_permission_checkbox")
-        if not audio_permission:
-            st.warning("Please check the box above to authorize your browser to play sound.")
-        else:
-            st.success("Audio permission granted!")
-            
+        audio_permission = st.checkbox("🔊 Enable Coach Voice Outputs", value=True, key="audio_permission_checkbox")
+        
         st.divider()
         st.subheader("Workout Plan")
 
@@ -210,14 +195,10 @@ def main():
     st.title("AI Real-time GYM Coach")
     st.markdown("#### Real-time pose detection with proactive AI voice coaching")
  
-    # ===================================================================
-    # 🔊 NATIVE AUDIO DISPATCHER
-    # ===================================================================
     if st.session_state.get("coach_feedback"):
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-    # Only fire audio if the explicit permission button has been checked
     if st.session_state.get("audio_to_play"):
         if st.session_state.get("audio_permission_checkbox", False):
             autoplay_audio(st.session_state.audio_to_play)
@@ -226,15 +207,7 @@ def main():
     if not workout_started:
         st.markdown(
             """
-            <div style="
-                border: 10px dashed #444;
-                border-radius: 0px;
-                padding: 48px 32px;
-                text-align: center;
-                color: #888;
-                margin-top: 32px;
-                margin-bottom: 32px;
-            ">
+            <div style="border: 10px dashed #444; border-radius: 0px; padding: 48px 32px; text-align: center; color: #888; margin-top: 32px; margin-bottom: 32px;">
                 <h2 style="color:#ccc; margin-bottom:8px;">👈 Set your workout plan</h2>
                 <p style="font-size:1.05rem;">
                     Choose your exercise, sets and reps in the sidebar,<br>
@@ -285,10 +258,6 @@ def main():
                 if result:
                     st.session_state.audio_to_play, st.session_state.coach_feedback = result
                     st.rerun()
-
-        if context.state.playing:
-            time.sleep(0.1)
-            st.rerun()
 
         inject_webrtc_styles()
 
