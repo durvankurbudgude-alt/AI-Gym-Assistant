@@ -1,6 +1,5 @@
 from services.config.workout_config import PROMPT
 
-
 class LLMCoach:
     def __init__(self, groq_client):
         self.client = groq_client
@@ -21,30 +20,27 @@ class LLMCoach:
 
         try:
             print("=" * 60)
-            print("LLM CALLED")
+            print("LLM CALLED SUCCESSFULLY")
             print("EVENT:", event)
             print("ISSUE:", issue)
 
+            # Updated to use the correct active production model on Groq
             response = self.client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.3-70b-specdec",
                 messages=messages,
                 temperature=0.4,
             )
 
             text = response.choices[0].message.content.strip()
-
             print("LLM RESPONSE:", text)
 
             self.history.append(
                 {"role": "assistant", "content": text}
             )
-
             return text
 
         except Exception as e:
             print("=" * 60)
-            print("GROQ ERROR:", str(e))
+            print("GROQ API CONNECTION ERROR:", str(e))
             print("=" * 60)
-
             return None
-    
