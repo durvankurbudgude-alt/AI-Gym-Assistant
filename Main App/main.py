@@ -171,15 +171,19 @@ def main():
     st.title("AI Real-time GYM Coach")
     st.markdown("#### Real-time pose detection with proactive AI voice coaching")
  
-    # Handle incoming audio playbacks safely via the browser text-to-speech engine
+   # Handle incoming audio playbacks safely using a persistent component state
     if st.session_state.get("coach_feedback"):
+        # 1. Display the coach's feedback card on the main screen
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-        autoplay_audio(st.session_state.coach_feedback)
-        
-        if "last_processed_feedback" not in st.session_state or st.session_state["last_processed_feedback"] != st.session_state.coach_feedback:
-            st.session_state["last_processed_feedback"] = st.session_state.coach_feedback
+        # 2. Check if this is a brand new message we haven't spoken yet
+        if st.session_state.get("last_spoken_text") != st.session_state.coach_feedback:
+            # Inject the audio code into the sidebar so it stays alive during main video reruns
+            with st.sidebar:
+                autoplay_audio(st.session_state.coach_feedback)
+            # Mark it as spoken so it doesn't loop
+            st.session_state["last_spoken_text"] = st.session_state.coach_feedback
 
     if not workout_started:
         st.markdown(
