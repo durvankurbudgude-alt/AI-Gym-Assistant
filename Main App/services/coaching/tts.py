@@ -14,7 +14,6 @@ class TextToSpeech:
             return None
         
         try:
-            # Create an in-memory byte stream buffer
             fp = io.BytesIO()
             tts = gTTS(text=cleaned, lang='en', tld='com')
             tts.write_to_fp(fp)
