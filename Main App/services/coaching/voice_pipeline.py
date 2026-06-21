@@ -94,11 +94,45 @@ class VoicePipeline:
         return voice, text
     
 
-def autoplay_audio(audio_bytes):
-    if not audio_bytes:
+def autoplay_audio(audio_text):
+    """
+    FIXED: Uses a data URI embedded inside an un-refreshable sandboxed iframe.
+    This prevents Streamlit's 0.25s main loop rerun from cutting off the browser's speech engine.
+    """
+    if not audio_text:
         return
     
-    st.markdown("<style>[data-testid='stAudio'] {display: none;}</style>", unsafe_allow_html=True)
+    # Clean string format for JavaScript injection
+    safe_text = str(audio_text).replace('"', '\\"').replace('\n', ' ')
     
-    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
-
+    # Unique ID to force re-evaluation on new feedback text
+    import time
+    unique_id = int(time.time() * 1000)
+    
+    # We embed the text-to-speech script inside a self-contained document string
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><script>
+        window.onload = function() {{
+            if ('speechSynthesis' in window) {{
+                window.speechSynthesis.cancel(); // clear previous queues
+                var utterance = new SpeechSynthesisUtterance("{safe_text}");
+                utterance.rate = 1.1;
+                window.speechSynthesis.speak(utterance);
+            }}
+        }};
+    </script></head>
+    <body></body>
+    </html>
+    """
+    
+    # Convert html to inline base64 data src so it loads independently of Streamlit's layout engine
+    import base64
+    b64_html = base64.b64encode(html_code.encode('utf-8')).decode('utf-8')
+    
+    # Render the sandboxed frame in the sidebar
+    st.components.v1.html(
+        f'<iframe src="data:text/html;base64,{b64_html}" width="0" height="0" style="display:none; border:none;"></iframe>',
+        height=0,
+    )
