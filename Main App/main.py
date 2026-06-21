@@ -21,20 +21,19 @@ from services.coaching.tts import TextToSpeech
 from services.coaching.voice_pipeline import VoicePipeline
 
 
-def autoplay_audio(audio_bytes):
+def autoplay_audio(audio_bytes, track_id):
     """
     Directly injects base64 audio bytes into an isolated native HTML5 audio element.
-    Bypasses Streamlit state lifecycle teardowns to prevent frame interruption.
+    Uses a persistent track_id so it stays alive across rapid video frame updates.
     """
     if not audio_bytes:
         return
     
     try:
         b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
-        unique_id = int(time.time() * 1000)
         
         audio_html = f"""
-        <div id="audio-player-wrapper-{unique_id}" style="display:none;">
+        <div id="audio-player-container-{track_id}" style="display:none;">
             <audio autoplay="autoplay" controls="controls" style="display:none;">
                 <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
             </audio>
@@ -62,6 +61,12 @@ def main():
         return 
 
     initial_session_defaults()
+
+    # Initialize persistent audio tracking states if they don't exist
+    if "current_audio_track" not in st.session_state:
+        st.session_state["current_audio_track"] = None
+    if "current_track_id" not in st.session_state:
+        st.session_state["current_track_id"] = 0
 
     # Isolated component slot dedicated to audio layout management
     audio_placeholder = st.empty()
@@ -115,6 +120,10 @@ def main():
                 st.session_state.last_saved_sets_completed = 0
                 st.session_state.coach_feedback = None
                 st.session_state.audio_to_play = None
+                
+                # Reset tracking variables cleanly for the new session
+                st.session_state["current_audio_track"] = None
+                st.session_state["current_track_id"] = int(time.time() * 1000)
 
                 if st.session_state.voice_pipeline:
                     result = st.session_state.voice_pipeline.process_event(
@@ -123,7 +132,9 @@ def main():
                         metrics={}
                     )
                     if result:
-                        st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                        st.session_state["current_audio_track"] = result[0]
+                        st.session_state["current_track_id"] = int(time.time() * 1000)
+                        st.session_state.coach_feedback = result[1]
 
                 st.session_state.last_notified_sets_completed = 0
                 st.session_state.last_notified_workout_complete = False
@@ -146,7 +157,9 @@ def main():
                         event="workout_completed", exercise=exercise, metrics={}
                     )
                     if result:
-                        st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                        st.session_state["current_audio_track"] = result[0]
+                        st.session_state["current_track_id"] = int(time.time() * 1000)
+                        st.session_state.coach_feedback = result[1]
                 st.rerun()
 
         if workout_started:
@@ -197,12 +210,17 @@ def main():
         st.markdown("")
         st.success(f"🤖 **Coach:** {st.session_state.coach_feedback}")
         
-    # Execute structural injection within the isolated player container frame
+    # Catch any newly prepared tracks and transfer them into the persistent viewer
     if st.session_state.get("audio_to_play"):
+        st.session_state["current_audio_track"] = st.session_state.audio_to_play
+        st.session_state["current_track_id"] = int(time.time() * 1000)
+        st.session_state["audio_to_play"] = None
+
+    # Render the persistent track safely so fast frame updates don't tear it down
+    if st.session_state.get("current_audio_track"):
         if st.session_state.get("audio_permission_checkbox", False):
             with audio_placeholder:
-                autoplay_audio(st.session_state.audio_to_play)
-        st.session_state["audio_to_play"] = None
+                autoplay_audio(st.session_state["current_audio_track"], st.session_state["current_track_id"])
 
     if not workout_started:
         st.markdown(
@@ -256,7 +274,9 @@ def main():
                     )
 
                 if result:
-                    st.session_state.audio_to_play, st.session_state.coach_feedback = result
+                    st.session_state["current_audio_track"] = result[0]
+                    st.session_state["current_track_id"] = int(time.time() * 1000)
+                    st.session_state.coach_feedback = result[1]
                     st.rerun()
 
         inject_webrtc_styles()
