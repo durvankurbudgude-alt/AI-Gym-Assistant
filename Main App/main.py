@@ -55,10 +55,7 @@ def main():
         layout="centered"
     )
 
-    load_css(os.path.join(os.getcwd(), "static", "style.css"))
-    inject_local_font(os.path.join(os.getcwd(), "static", "AdobeClean.otf"), "AdobeClean")
-
-    init_db()
+   init_db()
 
     if not render_login_wall():
         return 
@@ -66,29 +63,23 @@ def main():
     initial_session_defaults()
 
     # ===================================================================
-    # 🚨 SYSTEM API DIAGNOSTIC MONITOR
+    # 🔒 CLEAN PRODUCTION PIPELINE INITIALIZATION (DIAGNOSTICS REMOVED)
     # ===================================================================
-    st.sidebar.error("🛠️ Environment Variable Status")
-    
-    # 1. Inspect raw Key Availability
-    raw_env_key = os.environ.get("GROQ_API_KEY", "")
-    secret_key = st.secrets.get("GROQ_API_KEY", "") if hasattr(st, "secrets") else ""
-    
-    if raw_env_key:
-        st.sidebar.success("✅ .env GROQ_API_KEY Detected")
-    elif secret_key:
-        st.sidebar.success("✅ Streamlit Secrets Key Detected")
-    else:
-        st.sidebar.error("❌ MISSING GROQ_API_KEY (Both Env & Secrets are Empty!)")
-
-    # 2. Pipeline Compilation Validation Check
     if "voice_pipeline" not in st.session_state or st.session_state.voice_pipeline is None:
         try:
-            api_key = raw_env_key if raw_env_key else secret_key
-            
-            if not api_key:
-                raise ValueError("Cannot initialize Groq client without an active API token key value.")
+            api_key = os.environ.get("GROQ_API_KEY", "")
+            if not api_key and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+                api_key = st.secrets["GROQ_API_KEY"]
                 
+            if api_key:
+                groq_client = Groq(api_key=api_key)
+                llm_coach = LLMCoach(groq_client)
+                tts = TextToSpeech()
+                st.session_state.voice_pipeline = VoicePipeline(llm_coach, tts)
+        except Exception:
+            st.session_state.voice_pipeline = None
+
+    workout_started = st.session_state.get("workout_started", False)
             groq_client = Groq(api_key=api_key)
             llm_coach = LLMCoach(groq_client)
             tts = TextToSpeech()
