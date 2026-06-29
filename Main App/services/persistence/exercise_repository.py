@@ -1,4 +1,5 @@
 import sqlite3
+import bcrypt
 import streamlit as st
 from pathlib import Path
 
@@ -16,84 +17,139 @@ def init_db() -> None:
     conn = _get_connection()
 
     with conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                username   TEXT UNIQUE NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
-        conn.execute(
-            """
+        """)
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS exercises (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id       INTEGER NOT NULL REFERENCES users(id),
-                exercise_name TEXT    NOT NULL,
-                reps          INTEGER NOT NULL DEFAULT 0,
-                sets          INTEGER NOT NULL DEFAULT 0,
-                time          INTEGER NOT NULL DEFAULT 0,
-                created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                exercise_name TEXT NOT NULL,
+                reps INTEGER NOT NULL DEFAULT 0,
+                sets INTEGER NOT NULL DEFAULT 0,
+                time INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+        """)
 
 
-def get_user(username: str) -> sqlite3.Row:
+# ==========================
+# USER AUTHENTICATION
+# ==========================
+
+def get_user(username: str):
     conn = _get_connection()
 
     return conn.execute(
-        "SELECT * FROM users WHERE username = ?", (username,)
+        "SELECT * FROM users WHERE username=?",
+        (username,)
     ).fetchone()
 
 
-def create_user(username: str) -> sqlite3.Row:
+def register_user(username: str, password: str):
     conn = _get_connection()
-    
+
+    existing = get_user(username)
+
+    if existing:
+        return None
+
+    hashed_password = bcrypt.hashpw(
+        password.encode(),
+        bcrypt.gensalt()
+    ).decode()
+
     with conn:
         conn.execute(
-            "INSERT INTO users (username) VALUES (?)", (username,)
+            """
+            INSERT INTO users(username,password)
+            VALUES(?,?)
+            """,
+            (username, hashed_password)
         )
 
-    return get_user(username) 
+    return get_user(username)
 
 
-def get_or_create_user(username: str) -> sqlite3.Row:
+def login_user(username: str, password: str):
     user = get_user(username)
 
     if user is None:
-        user = create_user(username)
-    
-    return user
+        return None
 
+    if bcrypt.checkpw(
+        password.encode(),
+        user["password"].encode()
+    ):
+        return user
+
+    return None
+
+
+# ==========================
+# EXERCISE HISTORY
+# ==========================
 
 def add_exercise(user_id, exercise_name, reps, sets, time):
     conn = _get_connection()
 
     with conn:
         existing = conn.execute("""
-            SELECT * FROM exercises 
-            WHERE user_id = ? AND exercise_name = ? AND Date('created_at') = Date('now')
+            SELECT *
+            FROM exercises
+            WHERE user_id=?
+            AND exercise_name=?
+            AND DATE(created_at)=DATE('now')
         """, (user_id, exercise_name)).fetchone()
 
         if existing:
+
             conn.execute("""
-                UPDATE exercises 
-                SET reps = reps + ?, sets = sets + ?, time = time + ?
-                WHERE id = ?
-            """, (reps, sets, time, existing['id']))
+                UPDATE exercises
+                SET reps=reps+?,
+                    sets=sets+?,
+                    time=time+?
+                WHERE id=?
+            """, (
+                reps,
+                sets,
+                time,
+                existing["id"]
+            ))
+
         else:
+
             conn.execute("""
-                INSERT INTO exercises (user_id, exercise_name, sets, reps, time)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, exercise_name, sets, reps, time))
+                INSERT INTO exercises
+                (
+                    user_id,
+                    exercise_name,
+                    reps,
+                    sets,
+                    time
+                )
+                VALUES(?,?,?,?,?)
+            """, (
+                user_id,
+                exercise_name,
+                reps,
+                sets,
+                time
+            ))
 
 
 def get_users_exercises(user_id):
     conn = _get_connection()
 
     return conn.execute("""
-        SELECT * FROM exercises 
-        WHERE user_id = ?
+        SELECT *
+        FROM exercises
+        WHERE user_id=?
+        ORDER BY created_at DESC
     """, (user_id,)).fetchall()
